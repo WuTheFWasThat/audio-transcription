@@ -1,9 +1,23 @@
 from __future__ import absolute_import, division, print_function
 
+import os
+import argparse
 import generate
 
 import tensorflow as tf
 import numpy as np
+
+
+parser = argparse.ArgumentParser(description='Run a simple single-layer logistic model.')
+parser.add_argument('--niters', default=10000, type=int,
+                    help='How many iterations to run')
+parser.add_argument('--name', default='model', type=str,
+                    help='Name of run (determines locations to save it)')
+args = parser.parse_args()
+
+checkpoints_dir = os.path.join(os.getcwd(), 'checkpoints', args.name)
+if not os.path.exists(checkpoints_dir):
+    os.makedirs(checkpoints_dir)
 
 def init_weights(shape):
     return tf.Variable(tf.random_normal(shape, stddev=0.01))
@@ -38,14 +52,14 @@ with tf.Session() as sess:
 
     # restore from checkpoint
     if False:
-        saver.restore(sess, "model.ckpt.something")
+        saver.restore(sess, os.path.join(checkpoints_dir, "checkpoint.something"))
 
-    for i in range(10000):
+    for i in range(args.niters):
         if i % 100 == 0:
             print('Iteration %d' % i)
 
             # Save the variables to disk.
-            save_path = saver.save(sess, "model.ckpt.%d" % i)
+            save_path = saver.save(sess, os.path.join(checkpoints_dir, "checkpoint.%d" % i))
             print("Model saved in file: %s" % save_path)
 
             for i in range(10):

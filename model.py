@@ -23,7 +23,7 @@ w = init_weights([num_frequencies, num_notes])
 py_x = model(X, w)
 
 # compute mean cross entropy (softmax is applied internally)
-cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(py_x, Y))
+cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=py_x, labels=Y))
 # construct optimizer
 train_op = tf.train.GradientDescentOptimizer(0.05).minimize(cost)
 # at predict time, evaluate the argmax of the logistic regression
@@ -34,7 +34,7 @@ saver = tf.train.Saver()
 # Launch the graph in a session
 with tf.Session() as sess:
     # you need to initialize all variables
-    tf.initialize_all_variables().run()
+    tf.global_variables_initializer().run()
 
     # restore from checkpoint
     if False:

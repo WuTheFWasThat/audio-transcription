@@ -1,7 +1,0 @@
-# install tensorflow
-pip install matplotlib
-pip install pyknon
-pip install scipy
-pip install sh
-brew install lame
-brew install timidity

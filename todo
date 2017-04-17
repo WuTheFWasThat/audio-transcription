@@ -1,0 +1,10 @@
+- make training examples ahead of time instead of on the fly
+- try autoencoder model
+
+questions:
+  - should we learn an end to end/sequence to sequence model, or a model that takes a fixed length input?
+    seq2seq pros:
+      - don't need to stitch together multiple outputs to form final sheet music
+      - far away context might actually be important
+    fixed length pros:
+      - seq2seq with really long sequence might have ram problems?  i.e. entire unrolled network values are in memory

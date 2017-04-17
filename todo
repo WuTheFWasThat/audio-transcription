@@ -1,4 +1,8 @@
 - make training examples ahead of time instead of on the fly
+- make way to debug which inputs are bad, i.e. listen to the wav file
+- try adding noise
+- refactor models
+- try sequence to sequence model
 - try autoencoder model
 
 questions:

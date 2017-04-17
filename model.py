@@ -3,10 +3,16 @@ from __future__ import absolute_import, division, print_function
 import os
 import argparse
 import generate
+import time
 
 import tensorflow as tf
+from tensorflow.core.framework import summary_pb2
 import numpy as np
 
+
+def make_summary(name, val):
+    return summary_pb2.Summary(value=[summary_pb2.Summary.Value(tag=name,
+                                                                simple_value=val)])
 
 parser = argparse.ArgumentParser(description='Run a simple single-layer logistic model.')
 parser.add_argument('--niters', default=10000, type=int,
@@ -21,6 +27,9 @@ if not os.path.exists(checkpoints_dir):
 summaries_dir = os.path.join(os.getcwd(), 'summaries', args.name)
 if not os.path.exists(summaries_dir):
     os.makedirs(summaries_dir)
+data_dir = os.path.join(os.getcwd(), 'data', args.name)
+if not os.path.exists(data_dir):
+    os.makedirs(data_dir)
 
 def init_weights(shape):
     return tf.Variable(tf.random_normal(shape, stddev=0.01))
@@ -65,6 +74,13 @@ saver = tf.train.Saver()
 
 summaries_op = tf.summary.merge_all()
 
+training_data = [
+    generate.sampleLabeledData()
+    for _ in xrange(args.niters)
+]
+
+t = time.time()
+
 # Launch the graph in a session
 with tf.Session() as sess:
     train_writer = tf.summary.FileWriter(summaries_dir, sess.graph)
@@ -76,15 +92,15 @@ with tf.Session() as sess:
     if False:
         saver.restore(sess, os.path.join(checkpoints_dir, "checkpoint.something"))
 
-    for i in range(args.niters):
-        if i % 100 == 0:
-            print('Iteration %d' % i)
+    for step in xrange(args.niters):
+        if step % 100 == 0:
+            print('Iteration %d' % step)
 
             # Save the variables to disk.
-            save_path = saver.save(sess, os.path.join(checkpoints_dir, "checkpoint.%d" % i))
+            save_path = saver.save(sess, os.path.join(checkpoints_dir, "checkpoint.%d" % step))
             print("Model saved in file: %s" % save_path)
 
-            for j in range(10):
+            for _ in range(10):
                 (frequencies, answer) = generate.sampleLabeledData()
                 predicted = sess.run(predict_op, feed_dict={X: frequencies, Y: answer})[0]
                 if np.argmax(answer) == predicted:
@@ -92,10 +108,12 @@ with tf.Session() as sess:
                 else:
                     print('INCORRECT!', np.argmax(answer), predicted)
 
-        (frequencies, answer) = generate.sampleLabeledData()
+        (frequencies, answer) = training_data[step]
         # train
         summary, _ = sess.run([summaries_op, train_op], feed_dict={X: frequencies, Y: answer})
-        train_writer.add_summary(summary, i)
+        if step % 100 == 0:
+            train_writer.add_summary(summary, step)
+            train_writer.add_summary(make_summary('steps/sec', (time.time() - t)/(step + 1)), step)
 
     for i in range(10):
         (frequencies, answer) = generate.sampleLabeledData()

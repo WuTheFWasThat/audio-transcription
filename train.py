@@ -2,7 +2,6 @@ from __future__ import absolute_import, division, print_function
 
 import os
 import argparse
-import generate
 import time
 import pickle
 import logging
@@ -11,13 +10,13 @@ import tensorflow as tf
 from tensorflow.core.framework import summary_pb2
 import numpy as np
 
+import midi
+import models
+import constants
+
 logging.getLogger().setLevel(logging.INFO)
 logging.getLogger('sh').setLevel(logging.WARN)
 logging.basicConfig()
-
-def make_summary(name, val):
-    return summary_pb2.Summary(value=[summary_pb2.Summary.Value(tag=name,
-                                                                simple_value=val)])
 
 parser = argparse.ArgumentParser(description='Run a simple single-layer logistic model.')
 parser.add_argument('--niters', '-n', default=0, type=int,
@@ -33,49 +32,21 @@ summaries_dir = os.path.join(os.getcwd(), 'summaries', args.name)
 if not os.path.exists(summaries_dir):
     os.makedirs(summaries_dir)
 
-def init_weights(shape):
-    return tf.Variable(tf.random_normal(shape, stddev=0.01))
-
-def model(X, w):
-    return tf.matmul(X, w)
-
-def variable_summaries(var):
-  """Attach a lot of summaries to a Tensor (for TensorBoard visualization)."""
-  with tf.name_scope('summaries'):
-    mean = tf.reduce_mean(var)
-    tf.summary.scalar('mean', mean)
-    with tf.name_scope('stddev'):
-      stddev = tf.sqrt(tf.reduce_mean(tf.square(var - mean)))
-    tf.summary.scalar('stddev', stddev)
-    tf.summary.scalar('max', tf.reduce_max(var))
-    tf.summary.scalar('min', tf.reduce_min(var))
-    tf.summary.histogram('histogram', var)
+def make_summary(name, val):
+    return summary_pb2.Summary(value=[summary_pb2.Summary.Value(tag=name,
+                                                                simple_value=val)])
 
 def one_hot(n, i):
     assert i < n
     assert i >= 0
     return np.reshape([int(x == i) for x in xrange(n)], (1, -1))
 
-num_frequencies = 2205
-num_notes = 120
+model = models.BasicLogistic()
 
-X = tf.placeholder("float", [None, num_frequencies]) # create symbolic variables
-Y = tf.placeholder("float", [None, num_notes])
+X = tf.placeholder("float", [None, constants.NUM_FREQUENCIES]) # create symbolic variables
+Y = tf.placeholder("float", [None, constants.NUM_NOTES])
 
-w = init_weights([num_frequencies, num_notes])
-with tf.name_scope('weights'):
-    variable_summaries(w)
-
-py_x = model(X, w)
-
-# compute mean cross entropy (softmax is applied internally)
-cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=py_x, labels=Y))
-tf.summary.scalar('cross_entropy', cost)
-
-# construct optimizer
-train_op = tf.train.GradientDescentOptimizer(0.05).minimize(cost)
-# at predict time, evaluate the argmax of the logistic regression
-predict_op = tf.argmax(py_x, 1)
+(train_op, predict_op) = model.get_ops(X, Y)
 
 saver = tf.train.Saver()
 
@@ -109,31 +80,31 @@ with tf.Session() as sess:
             logging.info("Model saved in file: %s", save_path)
 
             for _ in range(10):
-                (frequencies, answer) = generate.sampleLabeledData()
+                (frequencies, answer) = midi.sampleLabeledData()
                 predicted = sess.run(
                     predict_op,
-                    feed_dict={X: frequencies, Y: one_hot(num_notes, answer)}
+                    feed_dict={X: frequencies, Y: one_hot(constants.NUM_NOTES, answer)}
                 )[0]
                 if answer == predicted:
                     logging.info('CORRECT! %d', answer)
                 else:
                     logging.info('INCORRECT! %d but guessed %d', answer, predicted)
 
-        (frequencies, answer) = generate.sampleLabeledData()
+        (frequencies, answer) = midi.sampleLabeledData()
         # train
         summary, _ = sess.run(
             [summaries_op, train_op],
-            feed_dict={X: frequencies, Y: one_hot(num_notes, answer)}
+            feed_dict={X: frequencies, Y: one_hot(constants.NUM_NOTES, answer)}
         )
         if step % 100 == 0:
             train_writer.add_summary(summary, step)
             train_writer.add_summary(make_summary('steps/sec', (time.time() - t)/step), step)
 
     for i in range(10):
-        (frequencies, answer) = generate.sampleLabeledData()
+        (frequencies, answer) = midi.sampleLabeledData()
         predicted = sess.run(
             predict_op,
-            feed_dict={X: frequencies, Y: one_hot(num_notes, answer)}
+            feed_dict={X: frequencies, Y: one_hot(constants.NUM_NOTES, answer)}
         )[0]
         if answer == predicted:
             logging.info('CORRECT! %s', answer)

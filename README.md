@@ -16,5 +16,6 @@
 
 # Run
 
-  `python model.py`
+  `python train.py`
+
   `tensorboard --logdir=summaries/model`

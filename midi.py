@@ -38,7 +38,8 @@ the frequency in Hz of audio samples and data is a list of sample values.
 def generateWavData(instrument, note):
     midi = Midi(1, instrument=instrument, tempo=90)
     midi.seq_notes(NoteSeq([Note(note - kMidiMiddleC)]), track=0)
-    (midi_filename, wav_filename) = ('temp.mid', 'temp.wav')
+    midi_filename = 'temp.mid'
+    wav_filename = 'temp.wav'
     midi.write(midi_filename)
     sh.timidity(midi_filename, '-Ow', '-o', wav_filename)
     (sample_rate, data) = wavfile.read(wav_filename)

@@ -20,8 +20,8 @@ def make_summary(name, val):
                                                                 simple_value=val)])
 
 parser = argparse.ArgumentParser(description='Run a simple single-layer logistic model.')
-parser.add_argument('--niters', '-n', default=10000, type=int,
-                    help='How many iterations to run')
+parser.add_argument('--niters', '-n', default=0, type=int,
+                    help='How many iterations to run, defaults to 0 meaning infinite')
 parser.add_argument('--name', default='model', type=str,
                     help='Name of run (determines locations to save it)')
 args = parser.parse_args()
@@ -32,9 +32,6 @@ if not os.path.exists(checkpoints_dir):
 summaries_dir = os.path.join(os.getcwd(), 'summaries', args.name)
 if not os.path.exists(summaries_dir):
     os.makedirs(summaries_dir)
-data_dir = os.path.join(os.getcwd(), 'data', args.name)
-if not os.path.exists(data_dir):
-    os.makedirs(data_dir)
 
 def init_weights(shape):
     return tf.Variable(tf.random_normal(shape, stddev=0.01))
@@ -84,21 +81,6 @@ saver = tf.train.Saver()
 
 summaries_op = tf.summary.merge_all()
 
-train_file = os.path.join(data_dir, 'train-%d.npy' % args.niters)
-if os.path.exists(train_file):
-    logging.info('Loading training data')
-    with open(train_file, 'r') as f:
-        training_data = pickle.load(f)
-else:
-    logging.info('Generating training data')
-    training_data = [
-        generate.sampleLabeledData()
-        for _ in xrange(args.niters)
-    ]
-    logging.info('Writing training data')
-    with open(train_file, 'w') as f:
-        pickle.dump(training_data, f)
-
 t = time.time()
 logging.info('Beginning training')
 
@@ -113,7 +95,12 @@ with tf.Session() as sess:
     if False:
         saver.restore(sess, os.path.join(checkpoints_dir, "checkpoint.something"))
 
-    for step in xrange(args.niters):
+    step = 0
+    while True:
+        step += 1
+        if args.niters > 0 and step > args.niters:
+            break
+
         if step % 100 == 0:
             logging.info('Iteration %d', step)
 
@@ -132,20 +119,15 @@ with tf.Session() as sess:
                 else:
                     logging.info('INCORRECT! %d but guessed %d', answer, predicted)
 
-        tt = time.time()
         (frequencies, answer) = generate.sampleLabeledData()
-        logging.debug('generation, %s', time.time() - tt)
-        # (frequencies, answer) = training_data[step]
         # train
-        tt = time.time()
         summary, _ = sess.run(
             [summaries_op, train_op],
             feed_dict={X: frequencies, Y: one_hot(num_notes, answer)}
         )
-        logging.debug('session run, %s', time.time() - tt)
         if step % 100 == 0:
             train_writer.add_summary(summary, step)
-            train_writer.add_summary(make_summary('steps/sec', (time.time() - t)/(step + 1)), step)
+            train_writer.add_summary(make_summary('steps/sec', (time.time() - t)/step), step)
 
     for i in range(10):
         (frequencies, answer) = generate.sampleLabeledData()

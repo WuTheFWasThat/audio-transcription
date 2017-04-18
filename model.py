@@ -4,18 +4,23 @@ import os
 import argparse
 import generate
 import time
+import pickle
+import logging
 
 import tensorflow as tf
 from tensorflow.core.framework import summary_pb2
 import numpy as np
 
+logging.getLogger().setLevel(logging.INFO)
+logging.getLogger('sh').setLevel(logging.WARN)
+logging.basicConfig()
 
 def make_summary(name, val):
     return summary_pb2.Summary(value=[summary_pb2.Summary.Value(tag=name,
                                                                 simple_value=val)])
 
 parser = argparse.ArgumentParser(description='Run a simple single-layer logistic model.')
-parser.add_argument('--niters', default=10000, type=int,
+parser.add_argument('--niters', '-n', default=10000, type=int,
                     help='How many iterations to run')
 parser.add_argument('--name', default='model', type=str,
                     help='Name of run (determines locations to save it)')
@@ -49,6 +54,11 @@ def variable_summaries(var):
     tf.summary.scalar('min', tf.reduce_min(var))
     tf.summary.histogram('histogram', var)
 
+def one_hot(n, i):
+    assert i < n
+    assert i >= 0
+    return np.reshape([int(x == i) for x in xrange(n)], (1, -1))
+
 num_frequencies = 2205
 num_notes = 120
 
@@ -74,12 +84,23 @@ saver = tf.train.Saver()
 
 summaries_op = tf.summary.merge_all()
 
-training_data = [
-    generate.sampleLabeledData()
-    for _ in xrange(args.niters)
-]
+train_file = os.path.join(data_dir, 'train-%d.npy' % args.niters)
+if os.path.exists(train_file):
+    logging.info('Loading training data')
+    with open(train_file, 'r') as f:
+        training_data = pickle.load(f)
+else:
+    logging.info('Generating training data')
+    training_data = [
+        generate.sampleLabeledData()
+        for _ in xrange(args.niters)
+    ]
+    logging.info('Writing training data')
+    with open(train_file, 'w') as f:
+        pickle.dump(training_data, f)
 
 t = time.time()
+logging.info('Beginning training')
 
 # Launch the graph in a session
 with tf.Session() as sess:
@@ -94,34 +115,48 @@ with tf.Session() as sess:
 
     for step in xrange(args.niters):
         if step % 100 == 0:
-            print('Iteration %d' % step)
+            logging.info('Iteration %d', step)
 
             # Save the variables to disk.
             save_path = saver.save(sess, os.path.join(checkpoints_dir, "checkpoint.%d" % step))
-            print("Model saved in file: %s" % save_path)
+            logging.info("Model saved in file: %s", save_path)
 
             for _ in range(10):
                 (frequencies, answer) = generate.sampleLabeledData()
-                predicted = sess.run(predict_op, feed_dict={X: frequencies, Y: answer})[0]
-                if np.argmax(answer) == predicted:
-                    print('CORRECT!', np.argmax(answer))
+                predicted = sess.run(
+                    predict_op,
+                    feed_dict={X: frequencies, Y: one_hot(num_notes, answer)}
+                )[0]
+                if answer == predicted:
+                    logging.info('CORRECT! %d', answer)
                 else:
-                    print('INCORRECT!', np.argmax(answer), predicted)
+                    logging.info('INCORRECT! %d but guessed %d', answer, predicted)
 
-        (frequencies, answer) = training_data[step]
+        tt = time.time()
+        (frequencies, answer) = generate.sampleLabeledData()
+        logging.debug('generation, %s', time.time() - tt)
+        # (frequencies, answer) = training_data[step]
         # train
-        summary, _ = sess.run([summaries_op, train_op], feed_dict={X: frequencies, Y: answer})
+        tt = time.time()
+        summary, _ = sess.run(
+            [summaries_op, train_op],
+            feed_dict={X: frequencies, Y: one_hot(num_notes, answer)}
+        )
+        logging.debug('session run, %s', time.time() - tt)
         if step % 100 == 0:
             train_writer.add_summary(summary, step)
             train_writer.add_summary(make_summary('steps/sec', (time.time() - t)/(step + 1)), step)
 
     for i in range(10):
         (frequencies, answer) = generate.sampleLabeledData()
-        predicted = sess.run(predict_op, feed_dict={X: frequencies, Y: answer})[0]
-        if np.argmax(answer) == predicted:
-            print('CORRECT!', np.argmax(answer))
+        predicted = sess.run(
+            predict_op,
+            feed_dict={X: frequencies, Y: one_hot(num_notes, answer)}
+        )[0]
+        if answer == predicted:
+            logging.info('CORRECT! %s', answer)
         else:
-            print('INCORRECT!', np.argmax(answer), predicted)
+            logging.info('INCORRECT! %s but guessed %s', answer, predicted)
 
-    # print(i, np.mean(np.argmax(teY, axis=1) ==
+    # logging.info(i, np.mean(np.argmax(teY, axis=1) ==
     #                  sess.run(predict_op, feed_dict={X: teX, Y: teY})))

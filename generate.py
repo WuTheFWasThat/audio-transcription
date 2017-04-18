@@ -87,10 +87,7 @@ def sampleLabeledData(instrument=None, note=None, progress=None):
         progress = random.random()
     # Generate the actual training sample.
     features = readSpectrum(generateWavData(instrument, note), progress)
-    return (
-        numpy.reshape(features, (1, -1)),
-        numpy.reshape([int(x == note) for x in xrange(kMidiMaxNote)], (1, -1)),
-    )
+    return (numpy.reshape(features, (1, -1)), note)
 
 if __name__ == '__main__':
     print sampleLabeledData()

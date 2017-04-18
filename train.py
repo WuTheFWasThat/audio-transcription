@@ -5,6 +5,7 @@ import argparse
 import time
 import pickle
 import logging
+import sh
 
 import tensorflow as tf
 from tensorflow.core.framework import summary_pb2
@@ -23,14 +24,15 @@ parser.add_argument('--niters', '-n', default=0, type=int,
                     help='How many iterations to run, defaults to 0 meaning infinite')
 parser.add_argument('--name', default='model', type=str,
                     help='Name of run (determines locations to save it)')
+parser.add_argument('--checkpoint', default=None, type=int,
+                    help='Number of checkpoint to restore')
 args = parser.parse_args()
 
 checkpoints_dir = os.path.join(os.getcwd(), 'checkpoints', args.name)
-if not os.path.exists(checkpoints_dir):
-    os.makedirs(checkpoints_dir)
+sh.mkdir('-p', checkpoints_dir)
 summaries_dir = os.path.join(os.getcwd(), 'summaries', args.name)
-if not os.path.exists(summaries_dir):
-    os.makedirs(summaries_dir)
+sh.rm('-rf', summaries_dir)
+sh.mkdir('-p', summaries_dir)
 
 def make_summary(name, val):
     return summary_pb2.Summary(value=[summary_pb2.Summary.Value(tag=name,
@@ -48,7 +50,7 @@ Y = tf.placeholder("float", [None, constants.NUM_NOTES])
 
 (train_op, predict_op) = model.get_ops(X, Y)
 
-saver = tf.train.Saver()
+saver = tf.train.Saver(max_to_keep=1)
 
 summaries_op = tf.summary.merge_all()
 
@@ -63,14 +65,25 @@ with tf.Session() as sess:
     tf.global_variables_initializer().run()
 
     # restore from checkpoint
-    if False:
-        saver.restore(sess, os.path.join(checkpoints_dir, "checkpoint.something"))
+    if args.checkpoint:
+        saver.restore(sess, os.path.join(checkpoints_dir, "checkpoint.%d" % args.checkpoint))
 
     step = 0
+    ncorrect = 0
     while True:
         step += 1
         if args.niters > 0 and step > args.niters:
             break
+
+        (frequencies, answer) = midi.sampleLabeledData()
+        # train
+        summaries, _, predicted = sess.run(
+            [summaries_op, train_op, predict_op],
+            feed_dict={X: frequencies, Y: one_hot(constants.NUM_NOTES, answer)}
+        )
+
+        if answer == predicted:
+            ncorrect += 1
 
         if step % 100 == 0:
             logging.info('Iteration %d', step)
@@ -79,26 +92,15 @@ with tf.Session() as sess:
             save_path = saver.save(sess, os.path.join(checkpoints_dir, "checkpoint.%d" % step))
             logging.info("Model saved in file: %s", save_path)
 
-            for _ in range(10):
-                (frequencies, answer) = midi.sampleLabeledData()
-                predicted = sess.run(
-                    predict_op,
-                    feed_dict={X: frequencies, Y: one_hot(constants.NUM_NOTES, answer)}
-                )[0]
-                if answer == predicted:
-                    logging.info('CORRECT! %d', answer)
-                else:
-                    logging.info('INCORRECT! %d but guessed %d', answer, predicted)
+            train_writer.add_summary(summaries, step)
+            train_writer.add_summary(
+                make_summary('sec/step', (time.time() - t)/step), step)
 
-        (frequencies, answer) = midi.sampleLabeledData()
-        # train
-        summary, _ = sess.run(
-            [summaries_op, train_op],
-            feed_dict={X: frequencies, Y: one_hot(constants.NUM_NOTES, answer)}
-        )
-        if step % 100 == 0:
-            train_writer.add_summary(summary, step)
-            train_writer.add_summary(make_summary('steps/sec', (time.time() - t)/step), step)
+            # train_writer.add_summary(
+            #     make_summary('percent correct', (ncorrect + 0.0) / step), step)
+            train_writer.add_summary(
+                make_summary('percent correct', (ncorrect + 0.0) / 100), step)
+            ncorrect = 0
 
     for i in range(10):
         (frequencies, answer) = midi.sampleLabeledData()

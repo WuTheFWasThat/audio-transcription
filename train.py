@@ -20,6 +20,8 @@ logging.getLogger('sh').setLevel(logging.WARN)
 logging.basicConfig()
 
 parser = argparse.ArgumentParser(description='Run a simple single-layer logistic model.')
+parser.add_argument('--batch_size', '-b', default=1, type=int,
+                    help='How many examples per batch')
 parser.add_argument('--niters', '-n', default=0, type=int,
                     help='How many iterations to run, defaults to 0 meaning infinite')
 parser.add_argument('--name', default='model', type=str,
@@ -70,20 +72,29 @@ with tf.Session() as sess:
 
     step = 0
     ncorrect = 0
+    nexamples = 0
     while True:
         step += 1
         if args.niters > 0 and step > args.niters:
             break
 
-        (frequencies, answer) = midi.sampleLabeledData()
-        # train
+        spectrums = []
+        answers = []
+        labels = []
+        for _ in xrange(args.batch_size):
+            (spectrum, answer) = midi.sampleLabeledData()
+            spectrums.append(spectrum)
+            answers.append(answer)
+            labels.append(one_hot(constants.NUM_NOTES, answer))
         summaries, _, predicted = sess.run(
             [summaries_op, train_op, predict_op],
-            feed_dict={X: frequencies, Y: one_hot(constants.NUM_NOTES, answer)}
+            feed_dict={
+                X: np.concatenate(spectrums, axis=0),
+                Y: np.concatenate(labels, axis=0),
+            }
         )
 
-        if answer == predicted:
-            ncorrect += 1
+        ncorrect += np.sum(np.equal(answers, predicted))
 
         if step % 100 == 0:
             logging.info('Iteration %d', step)
@@ -94,24 +105,11 @@ with tf.Session() as sess:
 
             train_writer.add_summary(summaries, step)
             train_writer.add_summary(
-                make_summary('sec/step', (time.time() - t)/step), step)
+                make_summary('steps/sec', step/(time.time() - t)), step)
 
             # train_writer.add_summary(
             #     make_summary('percent correct', (ncorrect + 0.0) / step), step)
             train_writer.add_summary(
-                make_summary('percent correct', (ncorrect + 0.0) / 100), step)
+                make_summary('percent correct',
+                             (ncorrect + 0.0) / (100 * args.batch_size)), step)
             ncorrect = 0
-
-    for i in range(10):
-        (frequencies, answer) = midi.sampleLabeledData()
-        predicted = sess.run(
-            predict_op,
-            feed_dict={X: frequencies, Y: one_hot(constants.NUM_NOTES, answer)}
-        )[0]
-        if answer == predicted:
-            logging.info('CORRECT! %s', answer)
-        else:
-            logging.info('INCORRECT! %s but guessed %s', answer, predicted)
-
-    # logging.info(i, np.mean(np.argmax(teY, axis=1) ==
-    #                  sess.run(predict_op, feed_dict={X: teX, Y: teY})))

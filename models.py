@@ -12,9 +12,9 @@ def init_weights(shape):
     return tf.Variable(tf.random_normal(shape, stddev=0.01))
 
 
-def variable_summaries(var):
+def variable_summaries(scope, var):
   """Attach a lot of summaries to a Tensor (for TensorBoard visualization)."""
-  with tf.name_scope('summaries'):
+  with tf.name_scope(scope):
     mean = tf.reduce_mean(var)
     tf.summary.scalar('mean', mean)
     with tf.name_scope('stddev'):
@@ -27,6 +27,7 @@ def variable_summaries(var):
 class BasicLogistic(Model):
     def get_ops(self, X, Y):
         w = init_weights([constants.NUM_FREQUENCIES, constants.NUM_NOTES])
+        variable_summaries('weights.summaries', w)
         py_x = tf.matmul(X, w)
 
         # compute mean cross entropy (softmax is applied internally)

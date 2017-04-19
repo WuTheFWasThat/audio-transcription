@@ -9,6 +9,9 @@ from scipy.io import wavfile
 
 import random
 import sh
+import os
+
+sh.mkdir('-p', 'midi_cache')
 
 # Notes in a midi file are in the range [0, 120).
 kMidiMiddleC = 60
@@ -36,11 +39,12 @@ the frequency in Hz of audio samples and data is a list of sample values.
 '''
 @memoize
 def generateWavData(instrument, note):
-    midi = Midi(1, instrument=instrument, tempo=90)
-    midi.seq_notes(NoteSeq([Note(note - kMidiMiddleC)]), track=0)
-    midi_filename = 'temp.mid'
+    midi_filename = 'midi_cache/i%d_n%d.mid'
+    if not os.path.exists(midi_filename):
+        midi = Midi(1, instrument=instrument, tempo=90)
+        midi.seq_notes(NoteSeq([Note(note - kMidiMiddleC)]), track=0)
+        midi.write(midi_filename)
     wav_filename = 'temp.wav'
-    midi.write(midi_filename)
     sh.timidity(midi_filename, '-Ow', '-o', wav_filename)
     (sample_rate, data) = wavfile.read(wav_filename)
     sh.rm(midi_filename, wav_filename)

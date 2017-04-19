@@ -20,7 +20,7 @@ logging.getLogger('sh').setLevel(logging.WARN)
 logging.basicConfig()
 
 parser = argparse.ArgumentParser(description='Run a simple single-layer logistic model.')
-parser.add_argument('--batch_size', '-b', default=1, type=int,
+parser.add_argument('--batch_size', '-b', default=32, type=int,
                     help='How many examples per batch')
 parser.add_argument('--niters', '-n', default=0, type=int,
                     help='How many iterations to run, defaults to 0 meaning infinite')
@@ -83,7 +83,9 @@ with tf.Session() as sess:
         labels = []
         for _ in xrange(args.batch_size):
             (spectrum, answer) = midi.sampleLabeledData()
-            spectrums.append(spectrum)
+            spectrums.append(
+                (spectrum - np.mean(spectrum)) / np.std(spectrum)
+            )
             answers.append(answer)
             labels.append(one_hot(constants.NUM_NOTES, answer))
         summaries, _, predicted = sess.run(

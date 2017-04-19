@@ -33,6 +33,7 @@ args = parser.parse_args()
 checkpoints_dir = os.path.join(os.getcwd(), 'checkpoints', args.name)
 sh.mkdir('-p', checkpoints_dir)
 summaries_dir = os.path.join(os.getcwd(), 'summaries', args.name)
+# remove old summaries so tensorboard doesn't pick them up
 sh.rm('-rf', summaries_dir)
 sh.mkdir('-p', summaries_dir)
 

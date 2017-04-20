@@ -8,12 +8,12 @@ import logging
 import sh
 
 import tensorflow as tf
-from tensorflow.core.framework import summary_pb2
 import numpy as np
 
 import midi
 import models
 import constants
+import utils
 
 logging.getLogger().setLevel(logging.INFO)
 logging.getLogger('sh').setLevel(logging.WARN)
@@ -36,15 +36,6 @@ summaries_dir = os.path.join(os.getcwd(), 'summaries', args.name)
 # remove old summaries so tensorboard doesn't pick them up
 sh.rm('-rf', summaries_dir)
 sh.mkdir('-p', summaries_dir)
-
-def make_summary(name, val):
-    return summary_pb2.Summary(value=[summary_pb2.Summary.Value(tag=name,
-                                                                simple_value=val)])
-
-def one_hot(n, i):
-    assert i < n
-    assert i >= 0
-    return np.reshape([int(x == i) for x in xrange(n)], (1, -1))
 
 model = models.BasicLogistic()
 
@@ -82,13 +73,17 @@ with tf.Session() as sess:
         spectrums = []
         answers = []
         labels = []
+
         for _ in xrange(args.batch_size):
-            (spectrum, answer) = midi.sampleLabeledData()
+            data = midi.sampleLabeledData()
+            spectrum = data['spectrum']
+            answer = data['note']
             spectrums.append(
                 (spectrum - np.mean(spectrum)) / np.std(spectrum)
             )
             answers.append(answer)
-            labels.append(one_hot(constants.NUM_NOTES, answer))
+            labels.append(utils.one_hot(constants.NUM_NOTES, answer))
+
         summaries, _, predicted = sess.run(
             [summaries_op, train_op, predict_op],
             feed_dict={
@@ -108,11 +103,11 @@ with tf.Session() as sess:
 
             train_writer.add_summary(summaries, step)
             train_writer.add_summary(
-                make_summary('steps/sec', step/(time.time() - t)), step)
+                utils.make_summary('steps/sec', step/(time.time() - t)), step)
 
             # train_writer.add_summary(
-            #     make_summary('percent correct', (ncorrect + 0.0) / step), step)
+            #     utils.make_summary('percent correct', (ncorrect + 0.0) / step), step)
             train_writer.add_summary(
-                make_summary('percent correct',
+                utils.make_summary('percent correct',
                              (ncorrect + 0.0) / (100 * args.batch_size)), step)
             ncorrect = 0

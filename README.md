@@ -16,12 +16,16 @@
 
 # Run
 
-- to train
+- to train:
+
   `python train.py`
 
-- to see summaries while training
+- to see summaries while training:
+
   `tensorboard --logdir=summaries/model`
 
-- debug a model
-  `python debug.py --checkpoint 2200`
+- debug a model:
+
+  `python debug.py --checkpoint 2200`.
+
   on os x, you can then `afplay $filename` to hear the file.

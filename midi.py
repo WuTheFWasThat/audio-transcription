@@ -72,16 +72,9 @@ def plotSequence(sequence):
     plot.show(block=True)
 
 '''
-Reads a wav file and returns the spectrum of a 0.1-second interval that is
-`progress` of the way through the file (e.g., if `progress` were 0.5, halfway
-through the file.)
+Given samples from a wav file, a start location and window size, takes the fft
 '''
-def readSpectrum(wav_data, progress):
-    (sample_rate, samples) = wav_data
-    window = sample_rate / 10
-    # Sample from between the first 0.1s and 0.9s of the note.
-    start = (0.1 + 0.8 * progress) * min(len(samples), sample_rate) - window/2
-    start = min(max(int(start), 0), len(samples) - window)
+def readSpectrum(samples, start, window):
     fragment = samples[start:start + window]
     return map(abs, fft(fragment)[:window/2])
 
@@ -92,7 +85,7 @@ The result is a pair (frequencies, note), where frequencies is a
 because the default sample rate for wavs is 44100), and the output is a
 120-dimensional one-hot encoding of the note.
 '''
-def sampleLabeledData(instrument=None, note=None, progress=None):
+def sampleLabeledData(instrument=None, note=None, progress=None, nsecs = 0.1):
     # The distribution we're sampling from is parametrized by a note to play
     # and by progress, the time into the duration of the note from which we
     # sample the frequencies.
@@ -103,8 +96,52 @@ def sampleLabeledData(instrument=None, note=None, progress=None):
         note = random.randint(0, kMidiMaxNote - 1)
     if progress is None:
         progress = random.random()
+
     # Generate the actual training sample.
-    features = readSpectrum(generateWavData(instrument, note), progress)
+    sample_rate, samples = generateWavData(instrument, note)
+    # only take from the first half second
+    progress = progress * (sample_rate / len(samples)) * 0.5
+
+    window = int(sample_rate * float(nsecs))
+
+    start = int(progress * (len(samples) - window))
+    assert start >= 0
+    assert start <= len(samples) - window
+    features = readSpectrum(samples, start, window)
+    return {
+        'spectrum': numpy.reshape(features, (1, -1)),
+        'note': note,
+        'progress': progress,
+        'instrument': instrument,
+    }
+
+'''
+Generates a single training sample for our note-classifying network.
+The result is a pair (frequencies, note), where frequencies is a
+4410-dimensional feature vector (the frequencies of 0.1 seconds of a wav file,
+because the default sample rate for wavs is 44100), and the output is a
+120-dimensional one-hot encoding of the note.
+'''
+def sampleLabeledSequentialData(instrument=None, note=None, nsecs=0.1, nsecs_overlap=0.05):
+    # The distribution we're sampling from is parametrized by a note to play
+    # and by progress, the time into the duration of the note from which we
+    # sample the frequencies.
+    if instrument is None:
+        family = random.randint(0, kMidiInstrumentFamilies - 1)
+        instrument = kMidiInstrumentFamilySize * family
+    if note is None:
+        note = random.randint(0, kMidiMaxNote - 1)
+
+    # Generate the actual training sample.
+    sample_rate, samples = generateWavData(instrument, note)
+
+    window = int(sample_rate * float(nsecs))
+    overlap = int(sample_rate * float(nsecs_overlap))
+    sequential_features = []
+    for start in range(0, len(samples) - window, overlap):
+        features = readSpectrum(sample_rate, start, window)
+        sequential_features.append(features)
+
     return {
         'spectrum': numpy.reshape(features, (1, -1)),
         'note': note,

@@ -80,4 +80,5 @@ with tf.Session() as sess:
             """,
             step, data['progress'], 'cache/wav_i%d_n%d.wav' % (data['instrument'], answer),
             answer, predicted)
+            # midi.plotSequence(spectrum[0])
             break

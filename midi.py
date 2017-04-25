@@ -99,12 +99,12 @@ def sampleLabeledData(instrument=None, note=None, progress=None, nsecs = 0.1):
 
     # Generate the actual training sample.
     sample_rate, samples = generateWavData(instrument, note)
-    # only take from the first half second
-    progress = progress * (sample_rate / len(samples)) * 0.5
 
     window = int(sample_rate * float(nsecs))
 
-    start = int(progress * (len(samples) - window))
+    # only take from the first half second
+    progress_overall = progress * (sample_rate / len(samples)) * 0.5
+    start = int(progress_overall * (len(samples) - window))
     assert start >= 0
     assert start <= len(samples) - window
     features = readSpectrum(samples, start, window)
@@ -138,14 +138,13 @@ def sampleLabeledSequentialData(instrument=None, note=None, nsecs=0.1, nsecs_ove
     window = int(sample_rate * float(nsecs))
     overlap = int(sample_rate * float(nsecs_overlap))
     sequential_features = []
-    for start in range(0, len(samples) - window, overlap):
-        features = readSpectrum(sample_rate, start, window)
+    for start in range(0, len(samples) - window, window - overlap):
+        features = readSpectrum(samples, start, window)
         sequential_features.append(features)
 
     return {
-        'spectrum': numpy.reshape(features, (1, -1)),
+        'spectrums': numpy.reshape(sequential_features, (1, len(sequential_features), -1)),
         'note': note,
-        'progress': progress,
         'instrument': instrument,
     }
 

@@ -22,8 +22,10 @@ logging.basicConfig()
 parser = argparse.ArgumentParser(description='Run a simple single-layer logistic model.')
 parser.add_argument('--batch_size', '-b', default=32, type=int,
                     help='How many examples per batch')
-parser.add_argument('--niters', '-n', default=0, type=int,
+parser.add_argument('--num_iters', '-n', default=0, type=int,
                     help='How many iterations to run, defaults to 0 meaning infinite')
+parser.add_argument('--save_iters', default=100, type=int,
+                    help='Frequency with which to save and log')
 parser.add_argument('--name', default='model', type=str,
                     help='Name of run (determines locations to save it)')
 parser.add_argument('--checkpoint', default=None, type=int,
@@ -37,10 +39,18 @@ summaries_dir = os.path.join(os.getcwd(), 'summaries', args.name)
 sh.rm('-rf', summaries_dir)
 sh.mkdir('-p', summaries_dir)
 
-model = models.BasicLogistic()
+# model = models.BasicLogistic()
+model = models.BasicSequential()
 
-X = tf.placeholder("float", [None, constants.NUM_FREQUENCIES]) # create symbolic variables
-Y = tf.placeholder("float", [None, constants.NUM_NOTES])
+if model.sequential():
+    # first dimension batch size
+    # second dimension time
+    X = tf.placeholder("float", [None, None, constants.NUM_FREQUENCIES])
+    Y = tf.placeholder("float", [None, constants.NUM_NOTES])
+else:
+    # first dimension batch size
+    X = tf.placeholder("float", [None, constants.NUM_FREQUENCIES])
+    Y = tf.placeholder("float", [None, constants.NUM_NOTES])
 
 (train_op, predict_op) = model.get_ops(X, Y)
 
@@ -67,7 +77,7 @@ with tf.Session() as sess:
     nexamples = 0
     while True:
         step += 1
-        if args.niters > 0 and step > args.niters:
+        if args.num_iters > 0 and step > args.num_iters:
             break
 
         spectrums = []
@@ -75,14 +85,32 @@ with tf.Session() as sess:
         labels = []
 
         for _ in xrange(args.batch_size):
-            data = midi.sampleLabeledData()
-            spectrum = data['spectrum']
+            if model.sequential():
+                data = midi.sampleLabeledSequentialData()
+                spectrum = data['spectrums']
+            else:
+                data = midi.sampleLabeledData()
+                spectrum = data['spectrum']
             answer = data['note']
             spectrums.append(
                 (spectrum - np.mean(spectrum)) / np.std(spectrum)
             )
             answers.append(answer)
             labels.append(utils.one_hot(constants.NUM_NOTES, answer))
+
+        # pad spectrums
+        if model.sequential():
+            max_len = max(
+                np.shape(spectrum)[1] for spectrum in spectrums
+            )
+            spectrums = [
+                np.pad(
+                    spectrum,
+                    mode='constant', constant_values=0,
+                    pad_width=((0, 0), (0, max_len - np.shape(spectrum)[1]), (0, 0)),
+                )
+                for spectrum in spectrums
+            ]
 
         summaries, _, predicted = sess.run(
             [summaries_op, train_op, predict_op],
@@ -94,7 +122,7 @@ with tf.Session() as sess:
 
         ncorrect += np.sum(np.equal(answers, predicted))
 
-        if step % 100 == 0:
+        if step % args.save_iters == 0:
             logging.info('Iteration %d', step)
 
             # Save the variables to disk.
@@ -108,6 +136,8 @@ with tf.Session() as sess:
             # train_writer.add_summary(
             #     utils.make_summary('percent correct', (ncorrect + 0.0) / step), step)
             train_writer.add_summary(
-                utils.make_summary('percent correct',
-                             (ncorrect + 0.0) / (100 * args.batch_size)), step)
+                utils.make_summary(
+                    'percent correct',
+                    (ncorrect + 0.0) / (args.save_iters * args.batch_size)),
+                step)
             ncorrect = 0

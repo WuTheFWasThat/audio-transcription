@@ -37,7 +37,7 @@ class BasicLogistic(Model):
         tf.summary.scalar('cross_entropy', cost)
 
         # construct optimizer
-        train_op = tf.train.GradientDescentOptimizer(0.05).minimize(cost)
+        train_op = tf.train.AdamOptimizer().minimize(cost)
         # at predict time, evaluate the argmax of the logistic regression
         predict_op = tf.argmax(p_y, 1)
         return train_op, predict_op
@@ -81,7 +81,7 @@ class BasicSequential(Model):
         grads_and_vars = list(zip(grads, tf.trainable_variables()))
 
         # Op to update all variables according to their gradient
-        train_op = tf.train.GradientDescentOptimizer(0.05).apply_gradients(
+        train_op = tf.train.AdamOptimizer().apply_gradients(
             grads_and_vars=clipped_grads_and_vars)
 
         for grad, var in grads_and_vars:

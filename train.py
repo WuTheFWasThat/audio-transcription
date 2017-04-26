@@ -39,8 +39,12 @@ summaries_dir = os.path.join(os.getcwd(), 'summaries', args.name)
 sh.rm('-rf', summaries_dir)
 sh.mkdir('-p', summaries_dir)
 
-# model = models.BasicLogistic()
-model = models.BasicSequential()
+if args.name == 'log':
+    model = models.BasicLogistic()
+elif args.name == 'seq':
+    model = models.BasicSequential()
+else:
+    raise Exception('Unknown model %s' % args.name)
 
 if model.sequential():
     # first dimension batch size
